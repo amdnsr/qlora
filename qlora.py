@@ -164,7 +164,7 @@ class TrainingArguments(transformers.Seq2SeqTrainingArguments):
         metadata={"help": "Free memory per gpu."}
     )
     report_to: str = field(
-        default='none',
+        default='wandb',
         metadata={"help": "To use wandb or something else for reporting."}
     )
     output_dir: str = field(default='./output', metadata={"help": 'The output dir for logs and checkpoints'})
@@ -264,7 +264,7 @@ def get_accelerate_model(args, checkpoint_dir):
     n_gpus = torch.cuda.device_count()
     max_memory = f'{args.max_memory_MB}MB'
     max_memory = {i: max_memory for i in range(n_gpus)}
-    device_map = "auto"
+    device_map = {'': 15}
 
     # if we are in a distributed setting, we need to set the device map and max memory per device
     if os.environ.get('LOCAL_RANK') is not None:
@@ -573,8 +573,10 @@ def make_data_module(tokenizer: transformers.PreTrainedTokenizer, args) -> Dict:
         return dataset
 
      # Load dataset.
-    dataset = load_data(args.dataset)
-    dataset = format_dataset(dataset, args.dataset_format)
+    from datasets import DatasetDict
+    dataset = DatasetDict.load_from_disk(args.dataset)
+    # dataset = load_data(args.dataset)
+    # dataset = format_dataset(dataset, args.dataset_format)
 
     # Split train/eval, reduce size
     if args.do_eval or args.do_predict:
@@ -631,6 +633,7 @@ def train():
     ))
     model_args, data_args, training_args, generation_args, extra_args = \
         hfparser.parse_args_into_dataclasses(return_remaining_strings=True)
+    # training_args.report_to = 'wandb'
     training_args.generation_config = transformers.GenerationConfig(**vars(generation_args))
     args = argparse.Namespace(
         **vars(model_args), **vars(data_args), **vars(training_args)
@@ -645,6 +648,7 @@ def train():
     model.config.use_cache = False
     print_trainable_parameters(args, model)
     print('loaded model')
+    print(model.device)
     set_seed(args.seed)
 
     # Tokenizer
